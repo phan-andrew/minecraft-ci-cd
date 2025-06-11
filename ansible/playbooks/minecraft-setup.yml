@@ -49,7 +49,7 @@
           - screen
           - htop
           - nano
-          - netcat
+          - nc
         state: present
 
     - name: Create minecraft user
