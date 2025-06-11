@@ -1,0 +1,150 @@
+---
+- name: Setup Minecraft Server
+  hosts: localhost
+  gather_facts: false
+  vars:
+    target_ip: "{{ target_ip | default('') }}"
+  tasks:
+    - name: Add target host to inventory
+      add_host:
+        name: minecraft_server
+        ansible_host: "{{ target_ip }}"
+        ansible_user: ec2-user
+        ansible_ssh_private_key_file: ~/.ssh/aws-academy-key.pem
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+      when: target_ip != ""
+
+- name: Configure Minecraft Server
+  hosts: minecraft_server
+  become: yes
+  gather_facts: yes
+  vars:
+    minecraft_version: "1.20.4"
+    minecraft_port: 25565
+    minecraft_max_players: 20
+    minecraft_difficulty: "normal"
+    minecraft_gamemode: "survival"
+    minecraft_motd: "Acme Corp Minecraft Server - Welcome!"
+    minecraft_user: minecraft
+    minecraft_dir: /opt/minecraft/server
+    java_heap_size: 2G
+    enable_rcon: true
+    rcon_port: 25575
+    rcon_password: "{{ ansible_date_time.epoch | hash('md5') }}"
+
+  tasks:
+    - name: Wait for system to be ready
+      wait_for_connection:
+        timeout: 300
+
+    - name: Gather facts
+      setup:
+
+    - name: Install required packages
+      yum:
+        name:
+          - java-11-openjdk-headless
+          - wget
+          - curl
+          - screen
+          - htop
+          - nano
+          - netcat
+        state: present
+
+    - name: Create minecraft user
+      user:
+        name: "{{ minecraft_user }}"
+        shell: /bin/bash
+        home: /opt/minecraft
+        create_home: yes
+        system: yes
+
+    - name: Create minecraft directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ minecraft_user }}"
+        group: "{{ minecraft_user }}"
+        mode: '0755'
+      loop:
+        - "{{ minecraft_dir }}"
+        - /opt/minecraft/backups
+        - /opt/minecraft/logs
+        - /opt/minecraft/scripts
+
+    - name: Download Minecraft server
+      get_url:
+        url: "https://piston-data.mojang.com/v1/objects/8f3112a1049751cc472ec13e397eade5336ca7ae/server.jar"
+        dest: "{{ minecraft_dir }}/minecraft_server.jar"
+        owner: "{{ minecraft_user }}"
+        group: "{{ minecraft_user }}"
+        mode: '0644'
+      notify: restart minecraft
+
+    - name: Create server.properties
+      template:
+        src: server.properties.j2
+        dest: "{{ minecraft_dir }}/server.properties"
+        owner: "{{ minecraft_user }}"
+        group: "{{ minecraft_user }}"
+        mode: '0644'
+      notify: restart minecraft
+
+    - name: Accept EULA
+      copy:
+        content: "eula=true\n"
+        dest: "{{ minecraft_dir }}/eula.txt"
+        owner: "{{ minecraft_user }}"
+        group: "{{ minecraft_user }}"
+        mode: '0644'
+
+    - name: Create startup script
+      template:
+        src: start-minecraft.sh.j2
+        dest: /opt/minecraft/scripts/start-minecraft.sh
+        owner: "{{ minecraft_user }}"
+        group: "{{ minecraft_user }}"
+        mode: '0755'
+
+    - name: Create systemd service file
+      template:
+        src: minecraft.service.j2
+        dest: /etc/systemd/system/minecraft.service
+        mode: '0644'
+      notify:
+        - reload systemd
+        - restart minecraft
+
+    - name: Enable and start minecraft service
+      systemd:
+        name: minecraft
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Wait for Minecraft server to start
+      wait_for:
+        port: "{{ minecraft_port }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        timeout: 180
+
+    - name: Display connection information
+      debug:
+        msg:
+          - "🎮 Minecraft server is running!"
+          - "Server IP: {{ ansible_default_ipv4.address }}"
+          - "Server Port: {{ minecraft_port }}"
+          - "RCON Port: {{ rcon_port }}"
+          - "RCON Password: {{ rcon_password }}"
+          - "Connect with: {{ ansible_default_ipv4.address }}:{{ minecraft_port }}"
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: restart minecraft
+      systemd:
+        name: minecraft
+        state: restarted

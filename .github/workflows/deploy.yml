@@ -1,0 +1,209 @@
+name: Deploy Minecraft Server
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+        - deploy
+        - destroy
+        - test-only
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: 1.6.0
+  ANSIBLE_VERSION: 8.0.0
+
+jobs:
+  validate:
+    name: Validate Infrastructure
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Terraform Format Check
+      working-directory: ./terraform
+      run: terraform fmt -check
+
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: terraform init
+
+    - name: Terraform Validate
+      working-directory: ./terraform
+      run: terraform validate
+
+    - name: Terraform Plan
+      working-directory: ./terraform
+      run: terraform plan -no-color
+
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy')
+    outputs:
+      instance_ip: ${{ steps.terraform-output.outputs.instance_ip }}
+      instance_id: ${{ steps.terraform-output.outputs.instance_id }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+        terraform_wrapper: false
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: terraform init
+
+    - name: Terraform Apply
+      working-directory: ./terraform
+      run: terraform apply -auto-approve
+
+    - name: Get Terraform Outputs
+      id: terraform-output
+      working-directory: ./terraform
+      run: |
+        echo "instance_ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
+        echo "instance_id=$(terraform output -raw instance_id)" >> $GITHUB_OUTPUT
+
+  configure:
+    name: Configure Minecraft Server
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Ansible
+      run: |
+        pip install ansible==${{ env.ANSIBLE_VERSION }}
+        pip install boto3 botocore
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Wait for instance to be ready
+      run: |
+        echo "Waiting for instance ${{ needs.deploy.outputs.instance_ip }} to be ready..."
+        timeout 300 bash -c 'until nc -z ${{ needs.deploy.outputs.instance_ip }} 22; do sleep 5; done'
+
+    - name: Create SSH key from secret
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/aws-academy-key.pem
+        chmod 600 ~/.ssh/aws-academy-key.pem
+
+    - name: Run Ansible Playbook
+      working-directory: ./ansible
+      run: |
+        export ANSIBLE_HOST_KEY_CHECKING=False
+        ansible-playbook -i inventory/aws_ec2.yml playbooks/minecraft-setup.yml \
+          --private-key ~/.ssh/aws-academy-key.pem \
+          -e "target_ip=${{ needs.deploy.outputs.instance_ip }}"
+
+  test:
+    name: Test Minecraft Server
+    runs-on: ubuntu-latest
+    needs: [deploy, configure]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install testing tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y nmap
+
+    - name: Wait for Minecraft server to start
+      run: |
+        echo "Waiting for Minecraft server to be ready on ${{ needs.deploy.outputs.instance_ip }}:25565..."
+        timeout 180 bash -c 'until nc -z ${{ needs.deploy.outputs.instance_ip }} 25565; do sleep 10; done'
+
+    - name: Test Minecraft Server Connection
+      run: |
+        echo "🧪 Testing Minecraft server connection..."
+        nmap -sV -Pn -p T:25565 ${{ needs.deploy.outputs.instance_ip }}
+
+    - name: Server Details
+      run: |
+        echo "🎮 Minecraft Server Deployed Successfully!"
+        echo "======================================"
+        echo "Server IP: ${{ needs.deploy.outputs.instance_ip }}"
+        echo "Server Port: 25565"
+        echo "Instance ID: ${{ needs.deploy.outputs.instance_id }}"
+        echo "======================================"
+        echo "Connect with: ${{ needs.deploy.outputs.instance_ip }}:25565"
+
+  cleanup:
+    name: Cleanup Resources
+    runs-on: ubuntu-latest
+    needs: [deploy, test]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: terraform init
+
+    - name: Terraform Destroy
+      working-directory: ./terraform
+      run: terraform destroy -auto-approve

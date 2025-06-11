@@ -1,0 +1,30 @@
+[Unit]
+Description=Minecraft Server
+After=network.target
+
+[Service]
+Type=forking
+User={{ minecraft_user }}
+Group={{ minecraft_user }}
+WorkingDirectory={{ minecraft_dir }}
+
+# Start script
+ExecStart=/opt/minecraft/scripts/start-minecraft.sh
+
+# Stop with proper shutdown
+ExecStop=/bin/kill -TERM $MAINPID
+TimeoutStopSec=120
+
+# Restart policy
+Restart=on-failure
+RestartSec=30
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
