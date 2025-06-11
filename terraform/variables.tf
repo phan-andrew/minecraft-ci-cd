@@ -13,7 +13,7 @@ variable "instance_type" {
 variable "key_name" {
   description = "Name of the AWS Academy key pair"
   type        = string
-  default     = "vockey"  # Default AWS Academy key pair name
+  default     = "vockey"
 }
 
 variable "root_volume_size" {

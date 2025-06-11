@@ -10,7 +10,7 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
-  
+
   default_tags {
     tags = {
       Project     = "MinecraftServer"
@@ -21,7 +21,6 @@ provider "aws" {
   }
 }
 
-# Use default VPC (AWS Academy setup)
 data "aws_vpc" "default" {
   default = true
 }
@@ -48,13 +47,11 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
-# Security Group
 resource "aws_security_group" "minecraft_sg" {
   name_prefix = "minecraft-server-sg"
   vpc_id      = data.aws_vpc.default.id
   description = "Security group for Minecraft server"
 
-  # SSH access
   ingress {
     from_port   = 22
     to_port     = 22
@@ -63,7 +60,6 @@ resource "aws_security_group" "minecraft_sg" {
     description = "SSH access"
   }
 
-  # Minecraft server port
   ingress {
     from_port   = 25565
     to_port     = 25565
@@ -72,7 +68,6 @@ resource "aws_security_group" "minecraft_sg" {
     description = "Minecraft server port"
   }
 
-  # Minecraft RCON port
   ingress {
     from_port   = 25575
     to_port     = 25575
@@ -81,7 +76,6 @@ resource "aws_security_group" "minecraft_sg" {
     description = "Minecraft RCON port"
   }
 
-  # All outbound traffic
   egress {
     from_port   = 0
     to_port     = 0
@@ -95,11 +89,10 @@ resource "aws_security_group" "minecraft_sg" {
   }
 }
 
-# EC2 Instance
 resource "aws_instance" "minecraft_server" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
-  key_name               = var.key_name  # Uses AWS Academy key pair "vockey"
+  key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.minecraft_sg.id]
   subnet_id              = data.aws_subnets.default.ids[0]
 
@@ -107,7 +100,7 @@ resource "aws_instance" "minecraft_server" {
     volume_type = "gp3"
     volume_size = var.root_volume_size
     encrypted   = true
-    
+
     tags = {
       Name = "minecraft-server-root-volume"
     }
@@ -127,7 +120,6 @@ resource "aws_instance" "minecraft_server" {
   }
 }
 
-# Elastic IP
 resource "aws_eip" "minecraft_eip" {
   instance = aws_instance.minecraft_server.id
   domain   = "vpc"
