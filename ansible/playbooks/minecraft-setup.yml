@@ -43,7 +43,7 @@
     - name: Install required packages
       yum:
         name:
-          - java-11-openjdk-headless
+          - java-17-amazon-corretto-headless
           - wget
           - curl
           - screen
