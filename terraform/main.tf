@@ -120,11 +120,11 @@ resource "aws_instance" "minecraft_server" {
   }
 }
 
-resource "aws_eip" "minecraft_eip" {
+/* resource "aws_eip" "minecraft_eip" {
   instance = aws_instance.minecraft_server.id
   domain   = "vpc"
 
   tags = {
     Name = "minecraft-server-eip"
   }
-}
+} /*
