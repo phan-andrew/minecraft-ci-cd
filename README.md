@@ -75,4 +75,12 @@ To destroy resources:
 
 **Ready to play**
 
+## Resources
+
+- [Terraform AWS Provider Documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [Ansible Documentation](https://docs.ansible.com/)
+- [Minecraft Server Properties](https://minecraft.fandom.com/wiki/Server.properties)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [AWS Academy Learning Resources](https://aws.amazon.com/training/awsacademy/)
+
 *This demonstrates professional DevOps practices with Infrastructure as Code and CI/CD automation.*
