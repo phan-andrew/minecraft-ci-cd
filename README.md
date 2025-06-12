@@ -2,14 +2,14 @@
 
 **Automated Minecraft Server Deployment on AWS Academy using Infrastructure as Code**
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites 
 - GitHub repository with this code
 - AWS Academy Learner Lab account 
 - GitHub Secrets configured
 
-### 🚀 Deploy Your Server
+### Deploy Your Server
 
 ```bash
 git add .
@@ -45,7 +45,7 @@ Connect with: XXX.XXX.XXX.XXX:25565
 nmap -sV -Pn -p T:25565 your-server-ip
 ```
 
-## 🔧 Management
+## Management
 
 ### SSH Access
 ```bash

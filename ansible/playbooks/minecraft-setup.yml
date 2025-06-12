@@ -180,7 +180,7 @@
     - name: Display connection information
       debug:
         msg:
-          - "🎮 Minecraft server setup completed!"
+          - "Minecraft server setup completed"
           - "Server IP: {{ ansible_default_ipv4.address }}"
           - "Server Port: {{ minecraft_port }}"
           - "Check the debug output above for any issues"
