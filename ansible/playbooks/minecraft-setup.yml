@@ -27,7 +27,7 @@
     minecraft_motd: "Acme Corp Minecraft Server - Welcome!"
     minecraft_user: minecraft
     minecraft_dir: /opt/minecraft/server
-    java_heap_size: 2G
+    java_heap_size: 1G
     enable_rcon: true
     rcon_port: 25575
     rcon_password: "{{ ansible_date_time.epoch | hash('md5') }}"
@@ -123,21 +123,68 @@
         state: started
         daemon_reload: yes
 
-    - name: Wait for Minecraft server to start
-      wait_for:
-        port: "{{ minecraft_port }}"
-        host: "{{ ansible_default_ipv4.address }}"
-        timeout: 180
+    - name: Check service status
+      command: systemctl status minecraft
+      register: service_status
+      ignore_errors: yes
+
+    - name: Display service status
+      debug:
+        var: service_status.stdout_lines
+
+    - name: Check startup script logs
+      shell: tail -20 /opt/minecraft/logs/minecraft-*.log 2>/dev/null || echo "No log files found"
+      register: minecraft_logs
+      ignore_errors: yes
+
+    - name: Display minecraft logs
+      debug:
+        var: minecraft_logs.stdout_lines
+
+    - name: Check java process
+      shell: ps aux | grep java | grep -v grep
+      register: java_process
+      ignore_errors: yes
+
+    - name: Display java process
+      debug:
+        var: java_process.stdout_lines
+
+    - name: Check script permissions
+      shell: ls -la /opt/minecraft/scripts/start-minecraft.sh
+      register: script_perms
+      ignore_errors: yes
+
+    - name: Display script permissions
+      debug:
+        var: script_perms.stdout
+
+    - name: Check if jar file exists
+      shell: ls -la /opt/minecraft/server/minecraft_server.jar
+      register: jar_file
+      ignore_errors: yes
+
+    - name: Display jar file info
+      debug:
+        var: jar_file.stdout
+
+    - name: Check available memory
+      shell: free -h
+      register: memory_info
+      ignore_errors: yes
+
+    - name: Display memory info
+      debug:
+        var: memory_info.stdout_lines
 
     - name: Display connection information
       debug:
         msg:
-          - "🎮 Minecraft server is running!"
+          - "🎮 Minecraft server setup completed!"
           - "Server IP: {{ ansible_default_ipv4.address }}"
           - "Server Port: {{ minecraft_port }}"
-          - "RCON Port: {{ rcon_port }}"
-          - "RCON Password: {{ rcon_password }}"
-          - "Connect with: {{ ansible_default_ipv4.address }}:{{ minecraft_port }}"
+          - "Check the debug output above for any issues"
+          - "If logs show errors, the server may need manual fixes"
 
   handlers:
     - name: reload systemd
