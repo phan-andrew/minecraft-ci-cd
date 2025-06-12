@@ -83,4 +83,4 @@ To destroy resources:
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [AWS Academy Learning Resources](https://aws.amazon.com/training/awsacademy/)
 
-*This demonstrates professional DevOps practices with Infrastructure as Code and CI/CD automation.*
+*This demonstrates DevOps practices with Infrastructure as Code and CI/CD automation.*
