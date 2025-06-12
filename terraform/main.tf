@@ -119,12 +119,3 @@ resource "aws_instance" "minecraft_server" {
     create_before_destroy = true
   }
 }
-
-/* resource "aws_eip" "minecraft_eip" {
-  instance = aws_instance.minecraft_server.id
-  domain   = "vpc"
-
-  tags = {
-    Name = "minecraft-server-eip"
-  }
-} /*
